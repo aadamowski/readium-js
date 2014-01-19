@@ -1,9 +1,8 @@
-define(['require', 'module', 'jquery', 'URIjs', './markup_parser'], function (require, module, $, URI, MarkupParser) {
+define(['require', 'module', 'jquery', 'URIjs'], function (require, module, $, URI) {
     console.log('plain_fetcher module id: ' + module.id);
 
-    var PlainExplodedFetcher = function(baseUrl){
+    var PlainExplodedFetcher = function(parentFetcher, baseUrl){
 
-        var _parser = new MarkupParser();
         var _jsonMetadata;
 
         var _packageUrl;
@@ -48,7 +47,7 @@ define(['require', 'module', 'jquery', 'URIjs', './markup_parser'], function (re
         function getXmlFileDom (filePath, callback, errorCallback) {
 
             fetchFileContentsText(filePath, function (xmlFileContents) {
-                var fileDom = _parser.parseXml(xmlFileContents);
+                var fileDom = parentFetcher.markupParser.parseXml(xmlFileContents);
                 callback(fileDom);
             }, errorCallback);
         }
@@ -91,7 +90,7 @@ define(['require', 'module', 'jquery', 'URIjs', './markup_parser'], function (re
 
             fetchFileContentsText(_packageUrl, function (packageXml) {
 
-                var packageDom = _parser.parseXml(packageXml);
+                var packageDom = parentFetcher.markupParser.parseXml(packageXml);
                 callback(packageDom);
 
             }, onerror);

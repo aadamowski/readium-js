@@ -7,16 +7,19 @@ define(['require', 'module', 'jquery', 'URIjs', './markup_parser', './discover_c
 
     var ResourceFetcher = function(rootUrl, libDir) {
 
+        var self = this;
+
         ResourceFetcher.contentTypePackageReadStrategyMap = {
             'application/oebps-package+xml': 'exploded',
             'application/epub+zip': 'zipped',
             'application/zip': 'zipped'
         };
 
-        var _markupParser = new MarkupParser();
         var _isExploded;
         var _dataFetcher;
-        
+
+        this.markupParser = new MarkupParser();
+
         this.initialize =  function(callback) {
 
             _isExploded = isExploded();
@@ -29,9 +32,7 @@ define(['require', 'module', 'jquery', 'URIjs', './markup_parser', './discover_c
             });
         };
 
-        
 
-        
 
         // INTERNAL FUNCTIONS
 
@@ -44,8 +45,9 @@ define(['require', 'module', 'jquery', 'URIjs', './markup_parser', './discover_c
         function createDataFetcher(isExploded, callback) {
 
             if(isExploded) {
+
                 console.log('using new PlainExplodedFetcher');
-                var plainFetcher =  new PlainExplodedFetcher(rootUrl);
+                var plainFetcher =  new PlainExplodedFetcher(self, rootUrl);
                 plainFetcher.initialize(function(){
 
                     callback(plainFetcher);
@@ -53,7 +55,7 @@ define(['require', 'module', 'jquery', 'URIjs', './markup_parser', './discover_c
             }
             else {
                 console.log('using new ZipFetcher');
-                callback(new ZipFetcher(rootUrl, libDir));
+                callback(new ZipFetcher(self, rootUrl, libDir));
             }
         }
 
@@ -347,7 +349,7 @@ define(['require', 'module', 'jquery', 'URIjs', './markup_parser', './discover_c
         this.resolveInternalPackageResources = function(contentDocumentURI, contentDocumentType, contentDocumentText,
                                                          resolvedDocumentCallback, onerror) {
 
-            var contentDocumentDom = _markupParser.parseMarkup(contentDocumentText, contentDocumentType);
+            var contentDocumentDom = self.markupParser.parseMarkup(contentDocumentText, contentDocumentType);
 
             var resolutionDeferreds = [];
 

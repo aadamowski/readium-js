@@ -1,7 +1,7 @@
-define(['require', 'module', 'jquery', 'URIjs', './markup_parser', './discover_content_type'], function (require, module, $, URI, MarkupParser, ContentTypeDiscovery) {
+define(['require', 'module', 'jquery', 'URIjs', './discover_content_type'], function (require, module, $, URI, ContentTypeDiscovery) {
     console.log('zip_fetcher module id: ' + module.id);
 
-    var ZipFetcher = function(baseUrl, libDir) {
+    var ZipFetcher = function(parentFetcher, baseUrl, libDir) {
 
         var self = this;
         var _checkCrc32 = false;
@@ -12,7 +12,6 @@ define(['require', 'module', 'jquery', 'URIjs', './markup_parser', './discover_c
         var _encryptionHash;
         var _packageDom;
         var _packageDomInitializationSubscription;
-        var _markupParser = new MarkupParser();
 
         var ENCRYPTION_METHODS = {
             'http://www.idpf.org/2008/embedding': embeddedFontDeobfuscateIdpf,
@@ -147,7 +146,7 @@ define(['require', 'module', 'jquery', 'URIjs', './markup_parser', './discover_c
         function getXmlFileDom (xmlFileRelativePath, callback, onerror) {
 
             getFileContentsFromPackage(xmlFileRelativePath, function (xmlFileContents) {
-                var fileDom = _markupParser.parseXml(xmlFileContents);
+                var fileDom = parentFetcher.markupParser.parseXml(xmlFileContents);
                 callback(fileDom);
             }, onerror);
         }
