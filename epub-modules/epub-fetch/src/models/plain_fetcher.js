@@ -1,58 +1,79 @@
-define(['require', 'module', 'jquery', 'URIjs'], function (require, module, $, URI) {
+define(['require', 'module', 'jquery', 'URIjs', './discover_content_type'], function (require, module, $, URI, ContentTypeDiscovery) {
     console.log('plain_fetcher module id: ' + module.id);
 
     var PlainExplodedFetcher = function(parentFetcher, baseUrl){
 
-        var _jsonMetadata;
+        var self = this;
+        var _packageAbsoluteUrl;
+        var _packageRelativePath;
 
-        var _packageUrl;
+        // INTERNAL FUNCTIONS
+
+        function fetchFileContents(fileRelativePath, readCallback, onerror) {
+            console.log('binary fetching ' + fileRelativePath);
+            var fileUrl = self.resolveURI(fileRelativePath);
+            console.log(fileRelativePath + ' resolves to ' + fileUrl);
+
+            if (typeof fileRelativePath === 'undefined') {
+                throw 'Fetched file relative path is undefined!';
+            }
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', fileUrl, true);
+            xhr.responseType = 'arraybuffer';
+            xhr.onerror = onerror;
+
+            xhr.onload = function (loadEvent) {
+                readCallback(xhr.response);
+            };
+
+            xhr.send();
+        }
+
+
+        // PUBLIC API
 
         this.initialize = function(callback) {
+            console.log('baseUrl: ' + baseUrl);
 
-            var containerPath = new URI(baseUrl + '/META-INF/container.xml');
-
-            getXmlFileDom(containerPath.path(), function (containerDom) {
-                _packageUrl = baseUrl + "/" + getRootFile(containerDom);
+            parentFetcher.getXmlFileDom('META-INF/container.xml', function (containerXmlDom) {
+                _packageRelativePath = parentFetcher.getRootFile(containerXmlDom);
+                _packageAbsoluteUrl = self.resolveURI(_packageRelativePath);
 
                 callback();
 
             }, function(error) {
                 console.error("unable to find package document: " + error);
-                _packageUrl = baseUrl;
+                _packageAbsoluteUrl = baseUrl;
 
                 callback();
             });
         };
 
         this.resolveURI = function (epubResourceURI) {
+            return baseUrl + "/" + epubResourceURI;
             // Make absolute to the package document path
-            var epubResourceRelURI = new URI(epubResourceURI);
-            var epubResourceAbsURI = epubResourceRelURI.absoluteTo(_packageUrl);
-            return epubResourceAbsURI.toString();
+//            var epubResourceRelURI = new URI(epubResourceURI);
+//            var epubResourceAbsURI = epubResourceRelURI.absoluteTo(baseUrl);
+//            return epubResourceAbsURI.toString();
         };
 
 
         this.getPackageUrl = function() {
-            return _packageUrl;
+            return _packageAbsoluteUrl;
         };
 
-
-        function getRootFile (containerDom) {
-            var rootFile = $('rootfile', containerDom);
-            var packageFullPath = rootFile.attr('full-path');
-            console.log('packageFullPath: ' + packageFullPath);
-            return packageFullPath;
-        }
-
-        function getXmlFileDom (filePath, callback, errorCallback) {
-
-            fetchFileContentsText(filePath, function (xmlFileContents) {
+        this.getXmlFileDom = function(fileRelativePath, callback, errorCallback) {
+            self.fetchFileContentsText(fileRelativePath, function (xmlFileContents) {
                 var fileDom = parentFetcher.markupParser.parseXml(xmlFileContents);
                 callback(fileDom);
             }, errorCallback);
-        }
+        };
 
-        function fetchFileContentsText (fileUrl, fetchCallback, onerror) {
+        this.fetchFileContentsText = function(fileRelativePath, fetchCallback, onerror) {
+            console.log('plain fetching ' + fileRelativePath);
+            var fileUrl = self.resolveURI(fileRelativePath);
+            console.log(fileRelativePath + ' resolves to ' + fileUrl);
 
             if (typeof fileUrl === 'undefined') {
                 throw 'Fetched file URL is undefined!';
@@ -71,24 +92,38 @@ define(['require', 'module', 'jquery', 'URIjs'], function (require, module, $, U
                     onerror(errorThrown);
                 }
             });
-        }
-
-        this.relativeToPackageFetchFileContents = function (relativeToPackagePath, fetchMode, fetchCallback, onerror) {
-            fetchFileContentsText(this.resolveURI(relativeToPackagePath), fetchCallback, onerror);
         };
 
-        this.getEncryptionDom = function (callback, onerror) {
-            // TODO: need a reliable method of finding META-INF/encryption.xml.
-            // This is a challenge since we begin with a path directly to the package document and don't go through META-INF/container.xml.
-            onerror(new Error('Getting encryption descriptor not yet implemented!'));
-        }
+        this.fetchFileContentsBlob = function(relativePath, fetchCallback, onerror) {
+
+            var decryptionFunction = parentFetcher.getDecryptionFunctionForRelativePath(relativePath);
+            if (decryptionFunction) {
+                console.log('== decryption required for ' + relativePath);
+                var origFetchCallback = fetchCallback;
+                fetchCallback = function (unencryptedBlob) {
+                    decryptionFunction(unencryptedBlob, function (decryptedBlob) {
+                        origFetchCallback(decryptedBlob);
+                    });
+                };
+            }
+            fetchFileContents(relativePath, function (contentsArrayBuffer) {
+                var blob = new Blob([contentsArrayBuffer], {
+                    type: ContentTypeDiscovery.identifyContentTypeFromFileName(relativePath)
+                });
+                fetchCallback(blob);
+            }, onerror);
+        };
+
+        this.relativeToPackageFetchFileContents = function (relativeToPackagePath, fetchMode, fetchCallback, onerror) {
+            // TODO: implement other (binary) fetch modes
+            self.fetchFileContentsText(relativeToPackagePath, fetchCallback, onerror);
+        };
 
         this.getPackageDom = function (callback, onerror) {
             console.log('getting package DOM');
+            console.log('_packageRelativePath: ' + _packageRelativePath);
 
-            console.log('baseUrl: ' + _packageUrl);
-
-            fetchFileContentsText(_packageUrl, function (packageXml) {
+            self.fetchFileContentsText(_packageRelativePath, function (packageXml) {
 
                 var packageDom = parentFetcher.markupParser.parseXml(packageXml);
                 callback(packageDom);
@@ -96,10 +131,6 @@ define(['require', 'module', 'jquery', 'URIjs'], function (require, module, $, U
             }, onerror);
         };
 
-        // Currently needed for deobfuscating fonts
-        this.setPackageJson = function(jsonMetadata) {
-            _jsonMetadata = jsonMetadata;
-        };
     };
 
     return PlainExplodedFetcher;
